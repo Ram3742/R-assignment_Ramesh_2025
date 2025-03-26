@@ -2,13 +2,14 @@
 title: "R_assignment"
 output: html_document
 ---
-
+# Libraries
 ```{r}
 library(tidyverse)
 library(tidyr)
 library(dplyr)
+library(janitor)
 ```
-
+# inspecting snp and fang data files
 ```{r}
 fang_genotypes <-read.table("fang_et_al_genotypes.txt")
 snp_position <- read.table("snp_position.txt", header = TRUE, sep = "\t", fill = TRUE)
@@ -16,27 +17,36 @@ snp_position <- read.table("snp_position.txt", header = TRUE, sep = "\t", fill =
 
 No.of rows and no. of columns in fang_genotypes.txt - 2783, and 986 No.of rows and no. of columns in snp_position.txt - 983 and 15
 
-#Transposing
+#Transposing of fang data files
 
 ```{r}
 Tr_fang_genotypes <- read.table("transposed_genotypes.txt")
+view(Tr_fang_genotypes)
 ```
 
-#Trimming_Tr_fang_genotypes_file
+#Trimming of Tr_fang_genotypes_file to remove top 3 rows
 
 ```{r}
-Trim_Tr_fang_data <- row_to_names(Tr_fang_genotypes, 2, remove_row = TRUE, remove_rows_above = TRUE)
-```
+library(janitor)
 
-#merging both files
+Trim_Tr_fang_data <- row_to_names(
+  Tr_fang_genotypes,
+  row_number = 3,
+  remove_row = TRUE,
+  remove_rows_above = TRUE
+)
+view(Trim_Tr_fang_data)
+```
+#merging both files ( snp and trimmed fang data files)
 
 ```{r}
 merged_data_file <- merge(snp_position, Trim_Tr_fang_data, by.x = "SNP_ID" ,by.y= "Group", all = TRUE)
 # Save the merged file
 write.table(merged_data_file, "merged_file.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+view(merged_data_file)
 ```
 
-#removing unwanted columns
+#removing unwanted columns in merged file to make a cleaned file
 
 ```{r}
 # Read the text file (assuming tab-separated format)
@@ -45,29 +55,38 @@ data <- read.table("merged_file.txt", header = TRUE, sep = "\t", stringsAsFactor
 data_cleaned <- data[, -c(2, 5:15)]
 # Save the cleaned file
 write.table(data_cleaned, "cleaned_file.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+view(data_cleaned)
 ```
 
-#Maize and Teosinte files_pulled out from cleaned_file.txt
+#separation of cleaned_file.txt to make maize and teosinte data files
 
 ```{r}
 # Load necessary library
 library(dplyr)
+
 # Read the merged file (assuming tab-separated format)
-data <- read.table("cleaned_file.txt.", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
-# Extract metadata columns (SNP_ID, Chromosome, Position)
-metadata_cols <- data %>% select(SNP_ID, Chromosome, Position)
-# Select maize genotype columns
-maize_cols <- c("ZMMIL", "ZMMLR", "ZMMMR")
-maize_data <- data %>% select(all_of(c("SNP_ID", "Chromosome", "Position", maize_cols)))
-# Select teosinte genotype columns
-teosinte_cols <- c("ZMPBA", "ZMPIL", "ZMPJA")
-teosinte_data <- data %>% select(all_of(c("SNP_ID", "Chromosome", "Position", teosinte_cols)))
+data <- read.table("cleaned_file.txt", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+
+# Select maize genotype columns along with metadata
+maize_data <- data %>%
+  select(SNP_ID, Chromosome, Position, 
+         starts_with("ZMMIL"), 
+         starts_with("ZMMLR"), 
+         starts_with("ZMMMR"))
+
+# Select teosinte genotype columns along with metadata
+teosinte_data <- data %>%
+  select(SNP_ID, Chromosome, Position, 
+         starts_with("ZMPBA"), 
+         starts_with("ZMPIL"), 
+         starts_with("ZMPJA"))
+
 # Save the extracted files
 write.table(maize_data, "maize_data.txt", sep = "\t", row.names = FALSE, quote = FALSE)
 write.table(teosinte_data, "teosinte_data.txt", sep = "\t", row.names = FALSE, quote = FALSE)
 ```
 
-#conerting ?/? to ? symbol in maize data and teosinte data
+#converting ?/? to ? symbol in maize data and teosinte data
 
 ```{r}
 # Read the file (assuming tab-separated format)
@@ -200,7 +219,6 @@ colnames(snp_data) <- c("Column1", "Column2", "Column3", "Column4", "Column5", "
 #Merging Maize and Teosinte data sets for visualization
 
 ```{r}
-# Load necessary library
 library(dplyr)
 
 # Read maize data
@@ -209,13 +227,8 @@ maize_data <- read.table("maize_data.txt", header = TRUE, sep = "\t", fill = TRU
 # Read teosinte data
 teosinte_data <- read.table("teosinte_data.txt", header = TRUE, sep = "\t", fill = TRUE, stringsAsFactors = FALSE)
 
-# Check if both datasets have the same number of columns
-if (ncol(maize_data) != ncol(teosinte_data)) {
-  stop("Error: Maize and Teosinte datasets have different column numbers. Check your files!")
-}
-
-# Merge the two datasets
-combined_data <- bind_rows(maize_data, teosinte_data)
+# Merge the two datasets based on common metadata columns
+combined_data <- full_join(maize_data, teosinte_data, by = c("SNP_ID", "Chromosome", "Position"))
 
 # Display structure of the merged data
 str(combined_data)
@@ -225,90 +238,83 @@ write.table(combined_data, "merged_snp_data.txt", sep = "\t", row.names = FALSE,
 
 # View first few rows
 head(combined_data)
-
 ```
-# original_visualization_part
 
 ```{r}
 # Load required libraries
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(scales)
 
-# Read Maize and Teosinte SNP Data
+# Read data
 maize_data <- read.table("maize_data.txt", header = TRUE, sep = "\t", fill = TRUE, stringsAsFactors = FALSE)
 teosinte_data <- read.table("teosinte_data.txt", header = TRUE, sep = "\t", fill = TRUE, stringsAsFactors = FALSE)
 
-# Ensure both datasets have the same column names
-colnames(teosinte_data) <- colnames(maize_data)
-
-# Merge datasets & add a new column to distinguish groups
+# Add group labels
 maize_data$Group <- "Maize"
 teosinte_data$Group <- "Teosinte"
 
-combined_data <- bind_rows(maize_data, teosinte_data)
+# Pivot longer to reshape genotype data
+maize_long <- maize_data %>%
+  pivot_longer(cols = -c(SNP_ID, Chromosome, Position, Group), names_to = "Sample", values_to = "Genotype")
 
-# Convert Chromosome column to factor with correct numerical order
-combined_data$Chromosome <- factor(combined_data$Chromosome, 
-                                   levels = as.character(1:10), 
-                                   ordered = TRUE)
+teosinte_long <- teosinte_data %>%
+  pivot_longer(cols = -c(SNP_ID, Chromosome, Position, Group), names_to = "Sample", values_to = "Genotype")
 
-# ---------------------------------
-# 1️⃣ SNP Count per Chromosome (Correct Order)
-# ---------------------------------
+# Combine both
+combined_data <- bind_rows(maize_long, teosinte_long)
 
-# Count SNPs per chromosome for each group
+# Ensure Chromosome is ordered factor
+combined_data$Chromosome <- factor(combined_data$Chromosome, levels = as.character(1:10), ordered = TRUE)
+
+# ------------------------------------------------------------------------------
+# 1️⃣ SNP Count per Chromosome (for each group)
+# ------------------------------------------------------------------------------
 snp_count <- combined_data %>%
-  group_by(Chromosome, Group) %>%
-  summarise(SNP_Count = n(), .groups = 'drop')
+  distinct(Group, Chromosome, SNP_ID) %>%
+  count(Chromosome, Group, name = "SNP_Count")
 
-# Plot SNP distribution across chromosomes (ordered correctly)
 ggplot(snp_count, aes(x = Chromosome, y = SNP_Count, fill = Group)) +
   geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "SNP Distribution Across Chromosomes",
-       x = "Chromosome", y = "SNP Count") +
+  labs(title = "SNP Count per Chromosome", x = "Chromosome", y = "SNP Count") +
   theme_minimal()
 
-# ---------------------------------
-# 2️⃣ Missing Data & Heterozygosity
-# ---------------------------------
+# ------------------------------------------------------------------------------
+# 2️⃣ Missing Data and Heterozygosity Summary
+# ------------------------------------------------------------------------------
 
-# Define heterozygous and missing data
+# Add classification for heterozygosity
 combined_data <- combined_data %>%
-  pivot_longer(cols = -c(Chromosome, Position, Group), names_to = "Sample", values_to = "Genotype") %>%
   mutate(
     Heterozygosity = case_when(
       Genotype %in% c("A/A", "C/C", "G/G", "T/T") ~ "Homozygous",
-      Genotype %in% c("A/T", "C/G", "A/C", "G/T") ~ "Heterozygous",
-      Genotype == "NA" ~ "Missing",
+      Genotype %in% c("A/T", "T/A", "C/G", "G/C", "A/C", "C/A", "G/T", "T/G") ~ "Heterozygous",
+      is.na(Genotype) | Genotype %in% c("NA", "") ~ "Missing",
       TRUE ~ "Unknown"
     )
   )
 
-# Ensure Chromosome order remains correct
-combined_data$Chromosome <- factor(combined_data$Chromosome, 
-                                   levels = as.character(1:10), 
-                                   ordered = TRUE)
-
-# Calculate proportions
+# Summary table
 het_summary <- combined_data %>%
   group_by(Group, Heterozygosity) %>%
-  summarise(Count = n(), .groups = 'drop') %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  group_by(Group) %>%
   mutate(Proportion = Count / sum(Count))
 
-# Plot proportion of homozygous, heterozygous, and missing data
+# Plot
 ggplot(het_summary, aes(x = Group, y = Proportion, fill = Heterozygosity)) +
   geom_bar(stat = "identity", position = "fill") +
-  labs(title = "Proportion of Homozygous, Heterozygous, and Missing Data",
+  scale_y_continuous(labels = percent) +
+  labs(title = "Homozygosity, Heterozygosity, and Missing Data",
        x = "Group", y = "Proportion") +
-  scale_y_continuous(labels = scales::percent) +
   theme_minimal()
 
-# ---------------------------------
-# 3️⃣ SNP Density Along Chromosomes (Correct Order)
-# ---------------------------------
+# ------------------------------------------------------------------------------
+# 3️⃣ SNP Density Along Chromosomes
+# ------------------------------------------------------------------------------
 
-# SNP density visualization using density plot
+# Plot SNP density along chromosomes
 ggplot(combined_data, aes(x = Position, fill = Group)) +
   geom_density(alpha = 0.5) +
   facet_wrap(~ Chromosome, scales = "free_x") +
@@ -319,12 +325,4 @@ ggplot(combined_data, aes(x = Position, fill = Group)) +
 ```
 
 
-
-
-
-
-
-
-
-
-
+`
